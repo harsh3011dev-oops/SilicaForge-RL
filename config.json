@@ -1,0 +1,16 @@
+{
+    "costs": {
+        "electricity_per_kwh": 7.0,
+        "quartz_per_kg": 5.0,
+        "carbon_per_kg": 20.0,
+        "argon_per_liter": 0.5
+    },
+    "thermo": {
+        "mechanism_file": "data/si_c_o_thermo.yaml"
+    },
+    "rl_hyperparameters": {
+        "total_timesteps": 100000,
+        "learning_rate": 0.0003,
+        "gamma": 0.99
+    }
+}

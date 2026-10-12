@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Checkpoints, Logs, and TensorBoard
+logs/
+checkpoints/
+*.log
+.tensorboard/
+
+# Model Weights (Trained artifacts)
+*.zip
+*.pt
+*.pth
+*.onnx
+
+# Environment & IDE
+.env
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary files
+scratch/
+temp_clone/
