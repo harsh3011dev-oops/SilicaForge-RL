@@ -97,6 +97,15 @@ def manual_step(temp: float, press: float, argon: float):
         "mode": "MANUAL"
     }
 
+@app.get("/api/benchmark")
+def get_benchmark_report():
+    report_path = os.path.join(os.path.dirname(__file__), "..", "optimization", "benchmark_report.json")
+    if os.path.exists(report_path):
+        import json
+        with open(report_path, "r") as f:
+            return json.load(f)
+    return {"error": "Benchmark report not found. Run industrial_benchmark_validation.py first."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
