@@ -5,6 +5,11 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+
+
 # Checkpoints, Logs, and TensorBoard
 logs/
 checkpoints/
