@@ -276,7 +276,6 @@ export default function App() {
         isRunning={isRunning}
         onToggleAgent={handleToggleAgent}
         onOpenFindings={() => setIsFindingsOpen(true)}
-        onResetFurnace={handleResetFurnace}
         connectionStatus={connectionStatus}
       />
 

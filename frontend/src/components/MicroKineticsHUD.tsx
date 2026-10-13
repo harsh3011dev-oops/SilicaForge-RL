@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Minimize2, Maximize2, Zap, Play, Pause, RefreshCw, Activity } from 'lucide-react';
+import { Minimize2, Maximize2, Zap, Play, Pause, Activity } from 'lucide-react';
 
 interface MicroKineticsHUDProps {
   temperature: number;
@@ -30,8 +30,20 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
     siCondensed: 9,
   });
 
-  const atomsRef = useRef<AtomParticle[]>([]);
-  const bondsGroupRef = useRef<THREE.Group | null>(null);
+  // Dynamic references so animation loop doesn't restart on prop updates
+  const tempRef = useRef(temperature);
+  tempRef.current = temperature;
+
+  const pausedRef = useRef(isPaused);
+  pausedRef.current = isPaused;
+
+  const multiplierRef = useRef(thermalMultiplier);
+  multiplierRef.current = thermalMultiplier;
+
+  const statsRef = useRef({
+    coEvolved: 18,
+    siCondensed: 9,
+  });
 
   useEffect(() => {
     if (isMinimized || !containerRef.current) return;
@@ -46,15 +58,15 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
     camera.position.set(0, 0, 16);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     rendererRef.current = renderer;
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // Warm ambient and key lighting
+    // Warm ambient and directional lighting
     const amb = new THREE.AmbientLight(0xfff8e7, 1.2);
     scene.add(amb);
     const dir = new THREE.DirectionalLight(0xffecd2, 1.4);
@@ -68,31 +80,22 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
     const wireframeBox = new THREE.LineSegments(boxEdges, boxMat);
     scene.add(wireframeBox);
 
-    // Group for dynamic bond lines
-    const bondsGroup = new THREE.Group();
-    scene.add(bondsGroup);
-    bondsGroupRef.current = bondsGroup;
-
-    // Materials for atoms
-    // Silicon: Warm Teal / Cyan-slate (#00838F / #0097A7)
+    // Materials for atoms (reused across instances)
     const siMat = new THREE.MeshStandardMaterial({
       color: 0x00838f,
       roughness: 0.3,
       metalness: 0.6,
     });
-    // Oxygen: Terracotta Red (#D84315)
     const oMat = new THREE.MeshStandardMaterial({
       color: 0xd84315,
       roughness: 0.4,
       metalness: 0.2,
     });
-    // Carbon reducing agent: Warm Graphite Slate (#37474F / #263238)
     const cMat = new THREE.MeshStandardMaterial({
       color: 0x37474f,
       roughness: 0.8,
       metalness: 0.4,
     });
-    // Gaseous CO molecule color (warm gold-smoke)
     const coMat = new THREE.MeshStandardMaterial({
       color: 0xe65100,
       emissive: 0xffa000,
@@ -100,9 +103,9 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
       roughness: 0.3,
     });
 
-    const siGeo = new THREE.SphereGeometry(0.55, 20, 20);
-    const oGeo = new THREE.SphereGeometry(0.38, 18, 18);
-    const cGeo = new THREE.SphereGeometry(0.48, 18, 18);
+    const siGeo = new THREE.SphereGeometry(0.55, 14, 14);
+    const oGeo = new THREE.SphereGeometry(0.38, 12, 12);
+    const cGeo = new THREE.SphereGeometry(0.48, 12, 12);
 
     const atoms: AtomParticle[] = [];
 
@@ -119,7 +122,7 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
       });
     }
 
-    // Spawn Oxygen atoms (part of SiO2 quartz molecules)
+    // Spawn Oxygen atoms
     for (let i = 0; i < 16; i++) {
       const mesh = new THREE.Mesh(oGeo, oMat);
       mesh.position.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
@@ -145,29 +148,40 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
       });
     }
 
-    atomsRef.current = atoms;
+    // Static Pre-allocated Dynamic Bond Lines buffer (Zero GC allocation per frame!)
+    const MAX_BONDS = 32;
+    const bondPositions = new Float32Array(MAX_BONDS * 2 * 3);
+    const bondGeo = new THREE.BufferGeometry();
+    const bondPosAttr = new THREE.BufferAttribute(bondPositions, 3);
+    bondPosAttr.setUsage(THREE.DynamicDrawUsage);
+    bondGeo.setAttribute('position', bondPosAttr);
+    const bondMat = new THREE.LineBasicMaterial({
+      color: 0xffb74d,
+      transparent: true,
+      opacity: 0.65,
+    });
+    const bondSegments = new THREE.LineSegments(bondGeo, bondMat);
+    scene.add(bondSegments);
 
     let animId: number;
-    let clock = new THREE.Clock();
+    let lastTime = performance.now();
+    let lastStatSync = performance.now();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      if (isPaused) return;
+      if (pausedRef.current) return;
 
-      const delta = clock.getDelta();
-      const speed = thermalMultiplier * (temperature > 1850 ? 1.4 : 0.8);
+      const now = performance.now();
+      const delta = Math.min((now - lastTime) * 0.001, 0.08);
+      lastTime = now;
 
-      // Clean old bond lines
-      while (bondsGroup.children.length > 0) {
-        const obj = bondsGroup.children[0];
-        bondsGroup.remove(obj);
-      }
+      const curTemp = tempRef.current;
+      const speed = multiplierRef.current * (curTemp > 1850 ? 1.4 : 0.8);
 
-      // Physics: Brownian motion & reaction kinetics
+      // Physics: Brownian motion inside reaction cage
       atoms.forEach((atom) => {
         atom.mesh.position.addScaledVector(atom.velocity, speed * 25 * delta);
 
-        // Boundary reflection inside warm reaction chamber
         const halfX = 4.8;
         const halfY = 3.0;
         const halfZ = 2.4;
@@ -185,46 +199,42 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
           atom.mesh.position.z = Math.sign(atom.mesh.position.z) * halfZ;
         }
 
-        // CO evolution: Gaseous CO naturally ascends toward top flue
+        // CO evolution: Gaseous CO ascends
         if (atom.type === 'CO') {
           atom.velocity.y = Math.abs(atom.velocity.y) * 0.8 + 0.02;
           if (atom.mesh.position.y >= halfY - 0.2) {
-            // Recycled at bottom
             atom.mesh.position.y = -halfY + 0.5;
           }
         }
 
-        // Si condensation: Pure Si drifts downward to form molten liquid lattice at crucible floor
+        // Si condensation: Pure Si drifts downward
         if (atom.type === 'Si' && atom.reacted) {
           atom.velocity.y = -Math.abs(atom.velocity.y) * 0.4 - 0.01;
         }
       });
 
-      // Atom-to-atom reaction collision checking
-      // At reaction temp (>1800°C), C + O collide and form CO, freeing Si to condense!
-      if (temperature >= 1800) {
-        for (let i = 0; i < atoms.length; i++) {
-          for (let j = i + 1; j < atoms.length; j++) {
+      // Update bonds in pre-allocated buffer
+      let bondCount = 0;
+      if (curTemp >= 1800) {
+        for (let i = 0; i < atoms.length && bondCount < MAX_BONDS; i++) {
+          for (let j = i + 1; j < atoms.length && bondCount < MAX_BONDS; j++) {
             const a = atoms[i];
             const b = atoms[j];
             const dist = a.mesh.position.distanceTo(b.mesh.position);
 
-            // Draw covalent/ionic bonds when atoms are close
             if (dist < 1.6 && !a.reacted && !b.reacted) {
-              const points = [a.mesh.position, b.mesh.position];
-              const bondGeo = new THREE.BufferGeometry().setFromPoints(points);
-              const bondMat = new THREE.LineBasicMaterial({
-                color: 0xffb74d,
-                transparent: true,
-                opacity: 0.65,
-              });
-              const line = new THREE.Line(bondGeo, bondMat);
-              bondsGroup.add(line);
+              const idx = bondCount * 6;
+              bondPositions[idx] = a.mesh.position.x;
+              bondPositions[idx + 1] = a.mesh.position.y;
+              bondPositions[idx + 2] = a.mesh.position.z;
+              bondPositions[idx + 3] = b.mesh.position.x;
+              bondPositions[idx + 4] = b.mesh.position.y;
+              bondPositions[idx + 5] = b.mesh.position.z;
+              bondCount++;
             }
 
             // Chemical reaction trigger
             if (dist < 0.85 && ((a.type === 'O' && b.type === 'C') || (a.type === 'C' && b.type === 'O'))) {
-              // Oxygen binds to Carbon -> CO gas
               const oAtom = a.type === 'O' ? a : b;
               const cAtom = a.type === 'C' ? a : b;
 
@@ -235,7 +245,6 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
                 cAtom.mesh.material = coMat;
                 oAtom.mesh.scale.set(0.6, 0.6, 0.6);
 
-                // Find nearest unreacted Si and mark as condensed
                 const nearestSi = atoms.find((at) => at.type === 'Si' && !at.reacted);
                 if (nearestSi) {
                   nearestSi.reacted = true;
@@ -243,15 +252,26 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
                   (nearestSi.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5;
                 }
 
-                setReactionStats((prev) => ({
-                  ...prev,
-                  coEvolved: prev.coEvolved + 1,
-                  siCondensed: prev.siCondensed + 1,
-                }));
+                statsRef.current.coEvolved += 1;
+                statsRef.current.siCondensed += 1;
               }
             }
           }
         }
+      }
+
+      // Update bond draw range without recreating geometries
+      bondGeo.setDrawRange(0, bondCount * 2);
+      bondPosAttr.needsUpdate = true;
+
+      // Throttled sync of stats to React state (every 1000ms instead of 60fps)
+      if (now - lastStatSync > 1000) {
+        setReactionStats((prev) => ({
+          ...prev,
+          coEvolved: statsRef.current.coEvolved,
+          siCondensed: statsRef.current.siCondensed,
+        }));
+        lastStatSync = now;
       }
 
       renderer.render(scene, camera);
@@ -273,11 +293,28 @@ export const MicroKineticsHUD: React.FC<MicroKineticsHUDProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animId);
-      if (rendererRef.current && rendererRef.current.domElement) {
+      if (rendererRef.current) {
         rendererRef.current.dispose();
+        rendererRef.current.forceContextLoss();
+        if (container.contains(rendererRef.current.domElement)) {
+          container.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current = null;
       }
+      siGeo.dispose();
+      oGeo.dispose();
+      cGeo.dispose();
+      boxGeo.dispose();
+      boxEdges.dispose();
+      bondGeo.dispose();
+      siMat.dispose();
+      oMat.dispose();
+      cMat.dispose();
+      coMat.dispose();
+      bondMat.dispose();
+      boxMat.dispose();
     };
-  }, [isMinimized, isPaused, thermalMultiplier, temperature]);
+  }, [isMinimized]);
 
   return (
     <div

@@ -18,6 +18,9 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
 
+  const telemetryRef = useRef(telemetry);
+  telemetryRef.current = telemetry;
+
   // Animated object refs
   const electrodesRef = useRef<THREE.Group[]>([]);
   const arcsRef = useRef<THREE.Line[]>([]);
@@ -110,7 +113,7 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     rendererRef.current = renderer;
@@ -454,11 +457,17 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     smokeParticlesRef.current = smokeParticles;
 
     // 10. Animation Loop
-    let clock = new THREE.Clock();
+    const startTime = performance.now();
+    let lastTime = performance.now();
 
     const animate = () => {
       animFrameIdRef.current = requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
+      const now = performance.now();
+      const elapsedTime = (now - startTime) * 0.001;
+      const delta = Math.min((now - lastTime) * 0.001, 0.08);
+      lastTime = now;
+
+      const curTelemetry = telemetryRef.current;
 
       // Controls update
       controls.autoRotate = autoRotate;
@@ -469,9 +478,9 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       if (smokePosArrayRef.current && smokeParticlesRef.current) {
         const positions = smokePosArrayRef.current;
         // Dynamic opacity tied to volatile SiO loss
-        const targetOpacity = Math.min(0.85, Math.max(0.18, telemetry.sio_lost * 8));
+        const targetOpacity = Math.min(0.85, Math.max(0.18, curTelemetry.sio_lost * 8));
         smokeMat.opacity = THREE.MathUtils.lerp(smokeMat.opacity, targetOpacity, 0.05);
-        smokeMat.size = 2.0 + telemetry.sio_lost * 25;
+        smokeMat.size = 2.0 + curTelemetry.sio_lost * 25;
 
         for (let i = 0; i < particleCount; i++) {
           const vel = smokeVelocities[i];
@@ -493,15 +502,13 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
 
       // Animate Molten Pool liquid shader & ripples
       if (moltenBathMeshRef.current) {
-        const temp = telemetry.temperature;
+        const temp = curTelemetry.temperature;
         // Interpolate molten color from Cherry Red (1450C) to Radiant Incandescent Gold (1866C+)
         const normalizedTemp = Math.max(0, Math.min(1, (temp - 1450) / (1950 - 1450)));
         const moltenColor = new THREE.Color();
         if (normalizedTemp < 0.6) {
-          // 1450 - 1750C: Cherry red to terracotta
           moltenColor.lerpColors(new THREE.Color('#8B0000'), new THREE.Color('#D84315'), normalizedTemp / 0.6);
         } else {
-          // 1750 - 1950C: Terracotta to Radiant Molten Gold
           moltenColor.lerpColors(new THREE.Color('#D84315'), new THREE.Color('#FFB300'), (normalizedTemp - 0.6) / 0.4);
         }
 
@@ -515,7 +522,7 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       }
 
       // Animate Electrodes translation based on electrode_delta and PPO actions
-      const targetDeltaY = (telemetry.electrode_delta || 0) * 0.04;
+      const targetDeltaY = (curTelemetry.electrode_delta || 0) * 0.04;
       electrodesRef.current.forEach((el, i) => {
         const offsetPhase = i * 2.0;
         const targetY = 12 + targetDeltaY + Math.sin(elapsedTime * 0.8 + offsetPhase) * 0.08;
@@ -567,8 +574,13 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      if (rendererRef.current && rendererRef.current.domElement) {
+      if (rendererRef.current) {
         rendererRef.current.dispose();
+        rendererRef.current.forceContextLoss();
+        if (container.contains(rendererRef.current.domElement)) {
+          container.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current = null;
       }
     };
   }, [cutawayActive]);

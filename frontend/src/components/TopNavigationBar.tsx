@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Award, RotateCcw, Flame, CheckCircle, ShieldAlert, Download } from 'lucide-react';
+import { Play, Pause, Award, Flame } from 'lucide-react';
 import { FurnaceTelemetry } from '../types/furnace';
 
 interface TopNavigationBarProps {
@@ -7,7 +7,7 @@ interface TopNavigationBarProps {
   isRunning: boolean;
   onToggleAgent: () => void;
   onOpenFindings: () => void;
-  onResetFurnace: () => void;
+  onResetFurnace?: () => void;
   connectionStatus: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING';
 }
 
@@ -16,7 +16,6 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   isRunning,
   onToggleAgent,
   onOpenFindings,
-  onResetFurnace,
   connectionStatus,
 }) => {
   const marginDeg = Math.round(2250 - telemetry.temperature);
@@ -104,28 +103,6 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             <Award className="w-3.5 h-3.5 text-[#E65100]" />
             <span className="hidden sm:inline">KEY SCIENTIFIC FINDINGS</span>
             <span className="sm:hidden">FINDINGS</span>
-          </button>
-
-          {/* 3. DOWNLOAD ZIP button */}
-          <a
-            href="/silicaforge-rl-ui.zip"
-            download="silicaforge-rl-ui.zip"
-            title="Download full project source code as ZIP"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#2C211B] text-[#FAF7F0] hover:bg-[#423229] transition-colors shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">DOWNLOAD ZIP</span>
-            <span className="sm:hidden">ZIP</span>
-          </a>
-
-          {/* 4. RESET FURNACE button (Clean cream neutral button) */}
-          <button
-            onClick={onResetFurnace}
-            title="Reset Furnace to Nominal State"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#FAF7F0] text-[#5D4037] border border-[#DDCFB4] hover:bg-[#EFE8D8] transition-colors shadow-xs"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">RESET</span>
           </button>
         </div>
       </div>
