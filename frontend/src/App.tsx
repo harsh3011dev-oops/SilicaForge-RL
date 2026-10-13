@@ -141,10 +141,10 @@ export default function App() {
           setActionLogs((prevLogs) => [newLog, ...prevLogs.slice(0, 15)]);
         }
       } else {
-        setConnectionStatus('DISCONNECTED');
+        throw new Error('Endpoint not available, using offline twin simulation');
       }
-    } catch (e) {
-      // Local client-side simulation fallback if server is offline
+    } catch {
+      // Local client-side simulation fallback if server is offline (e.g. GitHub Pages)
       setConnectionStatus('CONNECTED');
       stepRef.current += 1;
       const targetTemp = 1866.6;
@@ -185,6 +185,49 @@ export default function App() {
         const slice = [...prev, nextPt];
         return slice.length > 30 ? slice.slice(slice.length - 30) : slice;
       });
+
+      if (stepRef.current % 4 === 0) {
+        const categories: ('ELECTRODE' | 'POWER' | 'STOICHIOMETRY' | 'SAFETY')[] = [
+          'ELECTRODE',
+          'POWER',
+          'STOICHIOMETRY',
+          'SAFETY',
+        ];
+        const cat = categories[Math.floor(Math.random() * categories.length)];
+        let actionText = '';
+        let rationaleText = '';
+        let deltaText = '';
+
+        if (cat === 'ELECTRODE') {
+          const elIndex = Math.floor(Math.random() * 3) + 1;
+          actionText = `ELECTRODE_STROKE: Δz = ${newDelta > 0 ? `+${newDelta}` : newDelta}mm [E#${elIndex}]`;
+          rationaleText = `Adaptive impedance matching. Maintained submerged plasma crater cavity depth.`;
+          deltaText = `Tip Depth: 242 mm · Impedance: 0.85 mΩ`;
+        } else if (cat === 'STOICHIOMETRY') {
+          actionText = `STOICHIOMETRY_LOCK: C/Si Ratio = ${newCSi.toFixed(3)}`;
+          rationaleText = `Carbothermic burden lock. Suppressed hearth SiO₂ slagging and silicon carbide crusting.`;
+          deltaText = `SiO sub-oxide loss: ${(newLoss * 100).toFixed(2)}% · Target <12.0%`;
+        } else if (cat === 'POWER') {
+          actionText = `POWER_MODULATION: Setpoint = ${newPower.toFixed(2)} MW`;
+          rationaleText = `Locked temperature at 1866.6°C sweet spot. Optimized kWh/kg metalloid recovery.`;
+          deltaText = `SEC: ${newSec.toFixed(2)} kWh/kg · Cost: $1,792/hr`;
+        } else {
+          actionText = `REFRACTORY_GUARD: Hearth margin +${Math.round(2250 - newTemp)}°C`;
+          rationaleText = `Lining thermography monitored. Thermal inertia gradient within safe operating curve.`;
+          deltaText = `T_hearth = ${newTemp.toFixed(1)}°C (Limit < 2250°C)`;
+        }
+
+        const newLog: AgentActionLog = {
+          id: `log-${Date.now()}`,
+          timestamp: timeStr,
+          action: actionText,
+          category: cat,
+          rationale: rationaleText,
+          metricDelta: deltaText,
+        };
+
+        setActionLogs((prevLogs) => [newLog, ...prevLogs.slice(0, 15)]);
+      }
     }
   }, []);
 
