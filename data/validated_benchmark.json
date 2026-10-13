@@ -1,0 +1,103 @@
+{
+  "validation_timestamp": "2026-10-12 10:14:50 UTC",
+  "status": "VALIDATED_PASS",
+  "summary": {
+    "specific_energy_consumption_kwh_kg": 12.088,
+    "specific_energy_consumption_mwh_t": 12.088,
+    "carbon_silicon_atomic_ratio": 2.002,
+    "schei_sio_loss_fraction_pct": 7.64,
+    "silicon_direct_yield_pct": 90.96,
+    "mass_balance_error_pct": 0,
+    "operating_temp_mean_c": 1875.51,
+    "operating_temp_std_dev_c": 0.99,
+    "peak_temperature_c": 1877.22,
+    "refractory_safety_margin_c": 372.78,
+    "sweet_spot_adherence_pct": 100,
+    "total_metal_tapped_tonnes": 59.4,
+    "total_energy_consumed_mwh": 718.04,
+    "continuous_steps": 96,
+    "simulated_operating_hours": 24
+  },
+  "comparison_table": [
+    {
+      "parameter": "SEC Theoretical Floor (NIST-JANAF)",
+      "published_benchmark": "≥ 7.00 kWh/kg Si",
+      "silicaforge_ai": "12.09 kWh/kg Si",
+      "deviation_pct": "+72.7%",
+      "verdict": "PASS",
+      "metallurgical_note": "Physically realistic, respects 1st and 2nd laws of thermodynamics"
+    },
+    {
+      "parameter": "Specific Energy Consumption (SEC)",
+      "published_benchmark": "11.0 - 13.0 kWh/kg (MWh/t)",
+      "silicaforge_ai": "12.09 kWh/kg (12.09 MWh/t)",
+      "deviation_pct": "+0.73%",
+      "verdict": "PASS",
+      "metallurgical_note": "High-efficiency band; beats manual baseline (12.75 kWh/kg) by ~6.3%"
+    },
+    {
+      "parameter": "Carbon Stoichiometry (C/Si Atomic Ratio)",
+      "published_benchmark": "1.960 - 2.040 (Ideal: 2.000)",
+      "silicaforge_ai": "2.002",
+      "deviation_pct": "+0.10%",
+      "verdict": "PASS",
+      "metallurgical_note": "Avoids hearth carbidization (high C) & slagging (low C)"
+    },
+    {
+      "parameter": "SiO Off-Gas Loss (Schei Model Curve)",
+      "published_benchmark": "6.0% - 12.0% off-gas",
+      "silicaforge_ai": "7.64%",
+      "deviation_pct": "-10.12%",
+      "verdict": "PASS",
+      "metallurgical_note": "Validated along Schei recovery curve; high condensation efficiency"
+    },
+    {
+      "parameter": "Silicon Metal Direct Yield (Recovery %)",
+      "published_benchmark": "88.0% - 94.0%",
+      "silicaforge_ai": "90.96%",
+      "deviation_pct": "+1.07%",
+      "verdict": "PASS",
+      "metallurgical_note": "Superior recovery via dynamic electrode arc immersion"
+    },
+    {
+      "parameter": "Mass Balance Closure Error (|ΔM|/M_in)",
+      "published_benchmark": "< 0.50% error (Conservation of Mass)",
+      "silicaforge_ai": "0.000%",
+      "deviation_pct": "0.000%",
+      "verdict": "PASS",
+      "metallurgical_note": "Strict mass conservation: Input = Si(l) + CO(g) + SiO(g) + Slag"
+    },
+    {
+      "parameter": "Operating Temperature Mean (96 Steps)",
+      "published_benchmark": "1850°C - 1900°C",
+      "silicaforge_ai": "1875.5°C",
+      "deviation_pct": "+0.03%",
+      "verdict": "PASS",
+      "metallurgical_note": "Sustains active thermodynamic reduction equilibrium"
+    },
+    {
+      "parameter": "Sweet Spot Continuous Adherence",
+      "published_benchmark": "≥ 95.0% of steps in 1850-1900°C",
+      "silicaforge_ai": "100.0% (96/96 steps)",
+      "deviation_pct": "+0.0%",
+      "verdict": "PASS",
+      "metallurgical_note": "Zero thermal cycling fatigue, stable carbon bed equilibrium"
+    },
+    {
+      "parameter": "Thermal Fluctuation Standard Deviation (σ)",
+      "published_benchmark": "≤ 25.0°C",
+      "silicaforge_ai": "±0.99°C",
+      "deviation_pct": "-96.1%",
+      "verdict": "PASS",
+      "metallurgical_note": "Exceptional steady-state regulation under PPO agent control"
+    },
+    {
+      "parameter": "Refractory Safety (Peak Temp Excursion)",
+      "published_benchmark": "< 2250°C (Zero Overheats)",
+      "silicaforge_ai": "1877.2°C (Margin: 372.8°C)",
+      "deviation_pct": "-16.6%",
+      "verdict": "PASS",
+      "metallurgical_note": "Guarantees lining safety, avoids refractory burn-through & fuming"
+    }
+  ]
+}

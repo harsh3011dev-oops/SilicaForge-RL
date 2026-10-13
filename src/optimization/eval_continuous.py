@@ -25,10 +25,10 @@ def run_continuous_evaluation():
     with open(csv_file, mode='a', newline='') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(['Episode', 'Step', 'Temperature_C', 'Pressure_atm', 'Argon_Flow', 'Si_Yield_moles', 'Cost_INR', 'Reward'])
+            writer.writerow(['Episode', 'Step', 'Temperature_C', 'Power_MW', 'C_Si_Ratio', 'Electrode_Delta', 'Yield_Pct', 'SiO_Loss_Pct', 'Cost_USD_hr', 'Reward'])
 
-    print(f"\n--- Starting Infinite Evaluation ---")
-    print(f"Logging 'Good Discoveries' (High Yield or Reward) to {csv_file}\n")
+    print(f"\n--- Starting Continuous Evaluation ---")
+    print(f"Logging 'Good Discoveries' (Yield > 88% or High Reward) to {csv_file}\n")
     
     episode = 1
     best_reward_ever = -99999.0
@@ -37,40 +37,43 @@ def run_continuous_evaluation():
         state, _ = env.reset()
         print(f"--- Starting Episode {episode} ---")
         
-        for step in range(env.max_steps):
-            # Inject some completely random actions 10% of the time to force it to discover high temperatures
+        for step in range(env.max_steps_per_episode):
+            # Inject some exploratory actions 5% of the time
             import random
-            if random.random() < 0.10:
+            if random.random() < 0.05:
                 action = env.action_space.sample()
             else:
                 action, _states = model.predict(state, deterministic=False)
             
             state, reward, terminated, truncated, info = env.step(action)
             
-            real_temp = (state[0] * 1200.0) + 1000.0
-            real_press = (state[1] * 9.9) + 0.1
-            real_argon = state[2] * 5.0
-            si_yield = state[3]
-            cost = info['cost']
+            # Extract real physical furnace parameters
+            temp_c = float(info['temperature_c'])
+            power_mw = (float(action[0]) * 0.5 + 0.5) * env.MAX_POWER_MW
+            electrode_delta = float(action[1])
+            c_si_ratio = float(action[2]) * 0.2 + 2.0
+            yield_pct = float(info['liquid_silicon_yield']) * 100.0
+            sio_loss_pct = float(info['sio_loss_fraction']) * 100.0
+            cost_usd = float(info['electricity_cost_per_hr'])
             
-            # THE "GOOD CHANGE" LOGIC:
-            if si_yield > 0.05 or reward > best_reward_ever:
+            # THE "GOOD DISCOVERY" LOGIC:
+            if yield_pct > 88.0 or reward > best_reward_ever:
                 if reward > best_reward_ever:
                     best_reward_ever = reward
                     
-                print(f"\n🌟 BREAKTHROUGH! Ep {episode} Step {step+1}: Temp={real_temp:.0f}C | Yield={si_yield:.4f} | Reward={reward:.2f}")
+                print(f"\n🌟 BREAKTHROUGH! Ep {episode} Step {step+1}: Temp={temp_c:.1f}°C | Power={power_mw:.1f}MW | C/Si={c_si_ratio:.3f} | Yield={yield_pct:.2f}% | Reward={reward:.2f}")
                 
                 # Save to CSV
                 with open(csv_file, mode='a', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow([episode, step+1, round(real_temp, 2), round(real_press, 2), round(real_argon, 2), round(si_yield, 4), round(cost, 2), round(reward, 2)])
+                    writer.writerow([episode, step+1, round(temp_c, 2), round(power_mw, 2), round(c_si_ratio, 3), round(electrode_delta, 2), round(yield_pct, 2), round(sio_loss_pct, 2), round(cost_usd, 2), round(reward, 2)])
             
             # Print a small dot to show it's running
             print(".", end="", flush=True)
-            time.sleep(0.01) # Speed it up slightly
+            time.sleep(0.005)
             
             if terminated or truncated:
-                print(f" (Done! Final Temp: {real_temp:.0f}C | Yield: {si_yield:.4f} | Reward: {reward:.2f})")
+                print(f" (Done! Final Temp: {temp_c:.1f}°C | Yield: {yield_pct:.2f}% | Reward: {reward:.2f})")
                 break
                 
         episode += 1

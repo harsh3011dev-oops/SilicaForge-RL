@@ -53,6 +53,7 @@ class SilicaSmeltingEnv(gym.Env):
         self.prev_potential = 0.0
         self.step_count = 0
         self.max_steps_per_episode = 96        # 24 hours (96 * 15 min)
+        self.max_steps = self.max_steps_per_episode # Backward compatibility alias
 
     def _clausius_clapeyron_sio_pressure(self, temp_c):
         """Equilibrium SiO vapor pressure: log10(P_SiO [atm]) = 8.52 - 18400 / T_K"""

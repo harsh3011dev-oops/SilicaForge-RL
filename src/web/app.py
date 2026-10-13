@@ -61,12 +61,20 @@ def step_env():
     if terminated or truncated:
         state, _ = env.reset()
         
-    # Fetch real values directly from info dict instead of unpacking normalized state
+    # Action breakdown
+    power_norm = float(action[0]) * 0.5 + 0.5
+    power_mw = power_norm * env.MAX_POWER_MW
+    si_yield = float(info.get('yield', state[3]))
+    c_si = float(action[2]) * 0.2 + 2.0
+    sec_kwh = (power_mw * 0.25 * 1000.0) / max(1.0, ((power_mw / 28.5) * 2.72 * max(0.01, si_yield) * 0.25 * 1000.0))
+    
     return {
         "temperature": float(info.get('temperature', state[0])),
-        "pressure": float(info.get('pressure', 1.0)),
-        "argon": float(info.get('argon', 1.0)),
-        "yield": float(info.get('yield', state[3])),
+        "power_mw": round(power_mw, 2),
+        "sec_kwh": round(sec_kwh, 2),
+        "electrode_delta": round(float(action[1]), 3),
+        "c_si_ratio": round(c_si, 3),
+        "yield": si_yield,
         "sio_lost": float(info.get('sio_lost', state[4])),
         "cost": float(info.get('cost', 0.0)),
         "reward": float(reward),
