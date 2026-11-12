@@ -12,14 +12,39 @@ class SilicaSmeltingEnv(gym.Env):
     """
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self):
+    def __init__(
+        self,
+        heat_loss_multiplier=1.0,
+        power_derate=0.0,
+        yield_multiplier=1.0,
+        sensor_noise_std_c=0.0,
+        enhanced_observations=False,
+        domain_randomization=False,
+        safety_shield=False,
+    ):
         super().__init__()
+
+        self.base_heat_loss_multiplier = float(max(0.0, heat_loss_multiplier))
+        self.base_power_derate = float(np.clip(power_derate, 0.0, 0.95))
+        self.base_yield_multiplier = float(np.clip(yield_multiplier, 0.0, 1.0))
+        self.base_sensor_noise_std_c = float(max(0.0, sensor_noise_std_c))
+        self.enhanced_observations = enhanced_observations
+        self.domain_randomization = domain_randomization
+        self.safety_shield = safety_shield
+        self.heat_loss_multiplier = self.base_heat_loss_multiplier
+        self.power_derate = self.base_power_derate
+        self.yield_multiplier = self.base_yield_multiplier
+        self.sensor_noise_std_c = self.base_sensor_noise_std_c
         
         # State: [Temperature (°C), SiO2 burden (kg), C burden (kg), 
         #         Liquid Si Yield, SiO Loss, Prev Power Action, Energy MWh]
+        legacy_low = [25.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        legacy_high = [2500.0, 50000.0, 30000.0, 1.0, 1.0, 1.0, 500.0]
+        enhanced_low = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.0, 0.25]
+        enhanced_high = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.observation_space = spaces.Box(
-            low=np.array([25.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32),
-            high=np.array([2500.0, 50000.0, 30000.0, 1.0, 1.0, 1.0, 500.0], dtype=np.float32)
+            low=np.array(enhanced_low if enhanced_observations else legacy_low, dtype=np.float32),
+            high=np.array(enhanced_high if enhanced_observations else legacy_high, dtype=np.float32),
         )
         
         # Action: [Normalized Power (0 to 1 -> 0 to 30 MW), Electrode Delta (-1 to 1), C/Si Ratio (1.8 to 2.2)]
@@ -51,6 +76,8 @@ class SilicaSmeltingEnv(gym.Env):
         self.temperature = 1000.0
         self.prev_action_power = 0.5
         self.prev_potential = 0.0
+        self.electrode_depth_mm = 240.0
+        self.electrode_efficiency = 1.0
         self.step_count = 0
         self.max_steps_per_episode = 96        # 24 hours (96 * 15 min)
         self.max_steps = self.max_steps_per_episode # Backward compatibility alias
@@ -86,7 +113,11 @@ class SilicaSmeltingEnv(gym.Env):
             excess = temp_c - 1940.0
             yield_val = (0.91 * np.exp(-excess / 95.0)) * ratio_eff
             
-        yield_fraction = float(np.clip(yield_val, 0.0, 0.955))
+        yield_fraction = float(np.clip(
+            yield_val * self.yield_multiplier * self.electrode_efficiency,
+            0.0,
+            0.955,
+        ))
         
         # 2. SiO Offgas Loss Fraction
         if temp_c < 1650.0:
@@ -96,6 +127,77 @@ class SilicaSmeltingEnv(gym.Env):
         sio_loss = float(np.clip(sio_loss, 0.001, 1.0))
         
         return yield_fraction, sio_loss
+
+    def _randomize_episode_conditions(self):
+        """Sample plausible, bounded process variation for robust-policy training."""
+        if not self.domain_randomization:
+            self.heat_loss_multiplier = self.base_heat_loss_multiplier
+            self.power_derate = self.base_power_derate
+            self.yield_multiplier = self.base_yield_multiplier
+            self.sensor_noise_std_c = self.base_sensor_noise_std_c
+            return
+
+        self.heat_loss_multiplier = self.base_heat_loss_multiplier * float(np.random.uniform(0.85, 1.25))
+        self.power_derate = float(np.clip(self.base_power_derate + np.random.uniform(0.0, 0.12), 0.0, 0.95))
+        self.yield_multiplier = float(np.clip(self.base_yield_multiplier * np.random.uniform(0.90, 1.0), 0.0, 1.0))
+        self.sensor_noise_std_c = self.base_sensor_noise_std_c + float(np.random.uniform(0.0, 8.0))
+
+    def _apply_safety_shield(self, action):
+        """Limit unsafe actuator commands while preserving the requested action in info."""
+        requested_action = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
+        if not self.safety_shield:
+            return requested_action, False
+
+        shielded_action = requested_action.copy()
+        requested_power_norm = float(shielded_action[0]) * 0.5 + 0.5
+        power_norm = float(np.clip(requested_power_norm, self.prev_action_power - 0.18, self.prev_action_power + 0.18))
+        if self.temperature >= 2180.0:
+            power_norm = 0.0
+        elif self.temperature >= 2100.0:
+            power_norm = min(power_norm, 0.20)
+        elif self.temperature >= 2025.0:
+            power_norm = min(power_norm, 0.45)
+
+        if self.electrode_depth_mm <= 185.0:
+            shielded_action[1] = max(0.0, shielded_action[1])
+        elif self.electrode_depth_mm >= 315.0:
+            shielded_action[1] = min(0.0, shielded_action[1])
+
+        shielded_action[0] = power_norm * 2.0 - 1.0
+        shield_applied = not np.allclose(requested_action, shielded_action, atol=1e-6)
+        return shielded_action, shield_applied
+
+    def _make_observation(self, yield_fraction, sio_loss, cumulative_energy_mwh):
+        observed_temperature = float(np.clip(
+            self.temperature + np.random.normal(0.0, self.sensor_noise_std_c),
+            25.0,
+            2500.0,
+        ))
+        observation = [
+            observed_temperature,
+            35000.0 * (1.0 - yield_fraction),
+            14000.0 * (1.0 - yield_fraction),
+            yield_fraction,
+            sio_loss,
+            self.prev_action_power,
+            cumulative_energy_mwh,
+        ]
+        if self.enhanced_observations:
+            observation = [
+                observed_temperature / 2500.0,
+                observation[1] / 50000.0,
+                observation[2] / 30000.0,
+                yield_fraction,
+                sio_loss,
+                self.prev_action_power,
+                min(cumulative_energy_mwh, 800.0) / 800.0,
+                (self.electrode_depth_mm - 180.0) / 140.0,
+                np.clip((1483.0 + (self.temperature - 1860.0) * 0.4) / 2250.0, 0.0, 1.0),
+                1.0 - self.power_derate,
+                self.yield_multiplier,
+                np.clip(self.heat_loss_multiplier / 2.0, 0.25, 1.0),
+            ]
+        return np.array(observation, dtype=np.float32)
 
     def _calculate_potential_phi(self, temp_c, yield_fraction, sio_loss):
         """PBRS Potential Function Phi(s) strictly preserving optimal policy invariance."""
@@ -123,17 +225,24 @@ class SilicaSmeltingEnv(gym.Env):
         self.step_count += 1
         
         # Unpack normalized continuous action [-1, 1] and scale to physics bounds
-        action = np.clip(action, -1.0, 1.0)
+        requested_action = np.clip(action, -1.0, 1.0)
+        action, shield_applied = self._apply_safety_shield(requested_action)
         target_power_norm = float(action[0]) * 0.5 + 0.5  # [-1, 1] -> [0.0, 1.0]
         electrode_delta = float(action[1])                # [-1, 1] -> [-1.0, 1.0]
         c_si_ratio = float(action[2]) * 0.2 + 2.0         # [-1, 1] -> [1.8, 2.2]
         
-        power_mw = target_power_norm * self.MAX_POWER_MW
+        power_mw = target_power_norm * self.MAX_POWER_MW * (1.0 - self.power_derate)
+        if self.enhanced_observations:
+            self.electrode_depth_mm = float(np.clip(self.electrode_depth_mm + electrode_delta * 5.0, 180.0, 320.0))
+            electrode_offset = (self.electrode_depth_mm - 250.0) / 45.0
+            self.electrode_efficiency = float(0.90 + 0.10 * np.exp(-(electrode_offset ** 2)))
         
         # 1. Thermal Inertia Integration (1st-Order ODE)
         delta_t = self.temperature - 25.0
         # Reduced radiation coefficient by 100x because a Submerged Arc Furnace is insulated by the burden
-        q_loss_mw = 3.2 + 0.0078 * delta_t + 2.8e-14 * ((self.temperature + 273.15) ** 4.0)
+        q_loss_mw = self.heat_loss_multiplier * (
+            3.2 + 0.0078 * delta_t + 2.8e-14 * ((self.temperature + 273.15) ** 4.0)
+        )
         current_yield, _ = self._compute_thermodynamic_yield_and_loss(self.temperature, c_si_ratio)
         q_reaction_mw = 6.5 * current_yield if current_yield > 0.1 else 1.2
         
@@ -183,15 +292,7 @@ class SilicaSmeltingEnv(gym.Env):
         if terminated:
             composite_reward -= 5000.0
         
-        obs = np.array([
-            self.temperature,
-            35000.0 * (1.0 - next_yield),
-            14000.0 * (1.0 - next_yield),
-            next_yield,
-            sio_loss,
-            target_power_norm,
-            power_mw * 0.25 * self.step_count
-        ], dtype=np.float32)
+        obs = self._make_observation(next_yield, sio_loss, power_mw * 0.25 * self.step_count)
         
         info = {
             "temperature_c": self.temperature,
@@ -206,22 +307,36 @@ class SilicaSmeltingEnv(gym.Env):
             "temperature": self.temperature,
             "pressure": 1.0,
             "argon": 1.0,
-            "reward": composite_reward
+            "reward": composite_reward,
+            "requested_action": requested_action.tolist(),
+            "applied_action": action.tolist(),
+            "safety_shield_applied": shield_applied,
+            "electrode_depth_mm": self.electrode_depth_mm,
+            "available_power_fraction": 1.0 - self.power_derate,
+            "feed_reactivity": self.yield_multiplier,
+            "heat_loss_multiplier": self.heat_loss_multiplier,
+            "actual_power_mw": power_mw,
         }
         
         return obs, composite_reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        self._randomize_episode_conditions()
         self.temperature = float(np.random.uniform(950.0, 1050.0))
         self.prev_action_power = 0.5
+        if self.enhanced_observations:
+            self.electrode_depth_mm = float(np.random.uniform(230.0, 270.0))
+            electrode_offset = (self.electrode_depth_mm - 250.0) / 45.0
+            self.electrode_efficiency = float(0.90 + 0.10 * np.exp(-(electrode_offset ** 2)))
+        else:
+            self.electrode_depth_mm = 250.0
+            self.electrode_efficiency = 1.0
         self.step_count = 0
         init_yield, init_sio = self._compute_thermodynamic_yield_and_loss(self.temperature, 2.0)
         self.prev_potential = self._calculate_potential_phi(self.temperature, init_yield, init_sio)
         
-        obs = np.array([
-            self.temperature, 35000.0, 14000.0, init_yield, init_sio, self.prev_action_power, 0.0
-        ], dtype=np.float32)
+        obs = self._make_observation(init_yield, init_sio, 0.0)
         return obs, {}
 
 # Keep the old class name as an alias so existing imports don't break
