@@ -99,11 +99,17 @@ def run_rollout(
     enhanced_observations: bool,
     seed: int,
     steps: int,
+    multizone_observations: bool = False,
 ) -> tuple[dict, list[dict]]:
     """Run one seeded episode and return aggregate metrics plus raw telemetry."""
     random.seed(seed)
     np.random.seed(seed)
-    environment = SiliconEnv(**scenario_config, enhanced_observations=enhanced_observations, safety_shield=enhanced_observations)
+    environment = SiliconEnv(
+        **scenario_config,
+        enhanced_observations=enhanced_observations,
+        multizone_observations=multizone_observations,
+        safety_shield=(enhanced_observations or multizone_observations),
+    )
     observation, _ = environment.reset(seed=seed)
 
     traces: list[dict] = []
@@ -264,9 +270,10 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     ppo_model = PPO.load(str(model_path))
     observation_size = int(ppo_model.observation_space.shape[0])
-    if observation_size not in (7, 12):
-        raise ValueError(f"Unsupported PPO observation size: {observation_size}. Expected 7 or 12.")
+    if observation_size not in (7, 12, 18):
+        raise ValueError(f"Unsupported PPO observation size: {observation_size}. Expected 7, 12, or 18.")
     enhanced_observations = observation_size == 12
+    multizone_observations = observation_size == 18
 
     run_metrics: list[dict] = []
     traces: list[dict] = []
@@ -275,7 +282,7 @@ def main() -> None:
             seed = arguments.seed + run_index
             controllers = {
                 "fixed_power": fixed_controller,
-                "pid_temperature": build_pid_controller(normalized_observation=enhanced_observations),
+                "pid_temperature": build_pid_controller(normalized_observation=(enhanced_observations or multizone_observations)),
                 "ppo": build_ppo_controller(ppo_model),
                 "seeded_random": build_random_controller(seed),
             }
@@ -288,6 +295,7 @@ def main() -> None:
                     enhanced_observations,
                     seed,
                     arguments.steps,
+                    multizone_observations=multizone_observations,
                 )
                 run_metrics.append(metrics)
                 traces.extend(rollout_traces)
