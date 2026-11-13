@@ -23,7 +23,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
       <div className="relative w-full h-[780px] sm:h-[860px] overflow-hidden">
         {/* Background Real Industrial Submerged Arc Furnace Photo */}
         <img
-          src="/furnace_real.jpg"
+          src="./furnace_real.jpg"
           alt="28.5 MW Silicon Submerged Arc Furnace"
           className="w-full h-full object-cover object-center scale-100 filter brightness-[0.92] contrast-[1.08] saturate-[1.05]"
         />
