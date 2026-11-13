@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { LandingHero } from './components/LandingHero';
 import { TopNavigationBar } from './components/TopNavigationBar';
 import { ThreeFurnaceViewport } from './components/ThreeFurnaceViewport';
 import { MicroKineticsHUD } from './components/MicroKineticsHUD';
@@ -59,6 +60,7 @@ const INITIAL_ACTION_LOGS: AgentActionLog[] = [
 ];
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<'LANDING' | 'TWIN'>('LANDING');
   const [telemetry, setTelemetry] = useState<FurnaceTelemetry>(INITIAL_TELEMETRY);
   const [history, setHistory] = useState<TelemetryPoint[]>([]);
   const [actionLogs, setActionLogs] = useState<AgentActionLog[]>(INITIAL_ACTION_LOGS);
@@ -311,6 +313,10 @@ export default function App() {
     }
   };
 
+  if (currentPage === 'LANDING') {
+    return <LandingHero onExplore={() => setCurrentPage('TWIN')} />;
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#F7F4EB] text-[#2C211B] overflow-hidden">
       {/* 1. Top Control & Navigation Bar */}
@@ -319,6 +325,7 @@ export default function App() {
         isRunning={isRunning}
         onToggleAgent={handleToggleAgent}
         onOpenFindings={() => setIsFindingsOpen(true)}
+        onGoHome={() => setCurrentPage('LANDING')}
         connectionStatus={connectionStatus}
       />
 

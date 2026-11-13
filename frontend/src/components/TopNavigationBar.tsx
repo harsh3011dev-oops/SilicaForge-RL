@@ -7,6 +7,7 @@ interface TopNavigationBarProps {
   isRunning: boolean;
   onToggleAgent: () => void;
   onOpenFindings: () => void;
+  onGoHome?: () => void;
   onResetFurnace?: () => void;
   connectionStatus: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING';
 }
@@ -16,6 +17,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   isRunning,
   onToggleAgent,
   onOpenFindings,
+  onGoHome,
   connectionStatus,
 }) => {
   const marginDeg = Math.round(2250 - telemetry.temperature);
@@ -34,6 +36,14 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
               <h1 className="text-base font-extrabold tracking-tight text-[#2C211B] whitespace-nowrap">
                 SILICAFORGE-RL
               </h1>
+              {onGoHome && (
+                <button
+                  onClick={onGoHome}
+                  className="text-[11px] font-semibold text-[#8D4925] hover:text-[#E65100] underline underline-offset-2 ml-1 cursor-pointer"
+                >
+                  ← Back to Project Overview
+                </button>
+              )}
               <span className="hidden sm:inline-block text-[#C8B99C]">|</span>
               <span className="hidden sm:inline-block text-xs font-semibold text-[#8D4925]">
                 Submerged Arc Furnace Digital Twin
