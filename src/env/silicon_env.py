@@ -105,12 +105,23 @@ class SilicaSmeltingEnv(gym.Env):
         self.BASELINE_COST_PER_KG_SI = 1.65    # Global top-quartile benchmark cost ($/kg Si)
         self.SECONDARY_CONDENSER_EFFICIENCY = 0.70  # Stage 2: 70% of offgas SiO recovered as saleable Si/silica
         self.SECONDARY_RECOVERY_ENABLED = True      # Enable Stage 2 SiO Offgas Loop
+
+        # Industrial Burden Aerodynamics & Fluid Dynamics (Schei & Tveit 1998, SINTEF 2020)
+        self.FURNACE_HEARTH_DIAMETER_M = 7.5   # 28 MW circular furnace hearth diameter
+        self.FURNACE_CROSS_SECTION_M2 = np.pi * ((self.FURNACE_HEARTH_DIAMETER_M / 2.0) ** 2) # ~44.18 m2
+        self.WOODCHIP_FRACTION_NOMINAL = 0.145 # 14.5% woodchip blend in carbon mix
+        self.CRITICAL_GAS_VELOCITY_M_PER_S = 0.95 # Superficial velocity channeling threshold
+        self.OPTIMAL_GAS_VELOCITY_M_PER_S = 0.55  # Optimum velocity for 2SiO -> Si + SiO2 condensation
         
         # Raw Material & Feedstock Baseline Parameters (Section 3.1 Roadmap)
         self.quartz_purity = self.QUARTZ_PURITY
         self.quartz_moisture = 0.012           # 1.2% moisture in quartz
         self.carbon_fixed_pct = 0.90           # 90% fixed carbon
         self.carbon_reactivity = 1.0           # Reductant reactivity index
+        self.woodchip_fraction = self.WOODCHIP_FRACTION_NOMINAL # Volumetric void creator
+        self.burden_permeability = 0.88        # Darcy porosity index (0.5 to 1.0)
+        self.superficial_gas_velocity = 0.55   # Ascending gas velocity (m/s)
+        self.channeling_risk = 0.0             # Gas channeling probability (0.0 to 1.0)
         
         # Internal Thermal Zone States
         self.temperature_crater = 1865.0
@@ -591,9 +602,40 @@ class SilicaSmeltingEnv(gym.Env):
         
         # 1. Coupled Electrical Circuit State (Section 3.2 Roadmap)
         self.elec_state = self._compute_electrical_state(power_mw)
+
+        # Pragmatic Upgrade: Industrial Burden Permeability & Superficial Gas Velocity (Schei & Tveit 1998)
+        # Woodchip blend creates porosity K_p; gas flow V_dot = CO + SiO offgas volume
+        self.woodchip_fraction = float(np.clip(
+            self.WOODCHIP_FRACTION_NOMINAL + 0.05 * (2.0 - c_si_ratio),
+            0.08,
+            0.20
+        ))
+        self.burden_permeability = float(np.clip(
+            0.45 + 3.2 * self.woodchip_fraction,
+            0.55,
+            1.05
+        ))
+        # Total molar gas rate (kmol/s) = CO generated + unreacted SiO gas
+        # Reaction: SiO2 + 2C -> Si + 2 CO (2 moles CO per mole Si reduced)
+        n_co_kmol_s = (power_mw / 28.5) * 0.048  # proportional to active reduction rate
+        # Ideal gas law at burden exit temp ~1100 K: V_dot = n * R * T / P
+        v_dot_gas_m3_s = (n_co_kmol_s * 8.314 * (self.temperature_burden + 273.15)) / 101.325
+        # Superficial velocity (m/s) through open cross-section area:
+        effective_area = self.FURNACE_CROSS_SECTION_M2 * self.burden_permeability
+        self.superficial_gas_velocity = float(np.clip(v_dot_gas_m3_s / max(1.0, effective_area), 0.20, 1.60))
+        # Channeling Risk: Probability of gas eruption when velocity exceeds critical 0.95 m/s threshold
+        if self.superficial_gas_velocity > self.CRITICAL_GAS_VELOCITY_M_PER_S:
+            self.channeling_risk = float(np.clip((self.superficial_gas_velocity - self.CRITICAL_GAS_VELOCITY_M_PER_S) / 0.35, 0.0, 1.0))
+        else:
+            self.channeling_risk = 0.0
         
         # 2. Evaluate Reaction Kinetics & Elemental Mass Balance
         raw_yield, raw_sio_loss = self._compute_thermodynamic_yield_and_loss(self.temperature_crater, c_si_ratio)
+        # Channeling penalty: High velocity blows SiO out of furnace before reduction/condensation
+        if self.channeling_risk > 0.0:
+            raw_sio_loss = float(np.clip(raw_sio_loss * (1.0 + 0.85 * self.channeling_risk), 0.01, 0.48))
+            raw_yield = float(max(0.10, raw_yield * (1.0 - 0.40 * self.channeling_risk)))
+
         mass_bal = self._compute_mass_and_elemental_balance(
             self.temperature_crater, c_si_ratio, power_mw, raw_yield, raw_sio_loss
         )
@@ -605,11 +647,12 @@ class SilicaSmeltingEnv(gym.Env):
         # 2 SiO(g) -> Si(s) + SiO2(s) in lower-temperature condensation shaft (800 - 1100 °C)
         si_sio_loss_kg = mass_bal["si_sio_loss_kg"]
         if self.SECONDARY_RECOVERY_ENABLED and si_sio_loss_kg > 0.0:
-            # Condensation recovery efficiency depends on burden preheat and offgas velocity
-            cond_eff = self.SECONDARY_CONDENSER_EFFICIENCY * float(np.clip(
+            # Condensation recovery efficiency is inversely penalized by high gas velocity / channeling:
+            velocity_retention_factor = float(np.clip(1.0 - 0.60 * self.channeling_risk, 0.20, 1.0))
+            cond_eff = self.SECONDARY_CONDENSER_EFFICIENCY * velocity_retention_factor * float(np.clip(
                 1.0 - 0.20 * abs(c_si_ratio - 2.0) - 0.15 * max(0.0, (self.temperature_crater - 1920.0) / 200.0),
-                0.40,
-                0.85
+                0.35,
+                0.90
             ))
             si_recovered_secondary_kg = si_sio_loss_kg * cond_eff
             # Exothermic disproportionation heat recycled back into burden:
@@ -673,6 +716,8 @@ class SilicaSmeltingEnv(gym.Env):
             r_sio_term = -15.0 * ((net_unrecovered_sio_frac / 0.05) ** 2.0) if net_unrecovered_sio_frac > 0.04 else 0.0
             # Pillar 2: Stoichiometric balance penalty (punish over-coking SiC build-up or under-coking)
             r_stoich_penalty = -10.0 * ((c_si_ratio - 2.0) ** 2.0)
+            # Pragmatic Anti-Channeling & Aerodynamic Loss Penalty (SINTEF / Schei 1998)
+            r_channeling_penalty = -15.0 * (self.channeling_risk ** 2.0) if self.channeling_risk > 0.0 else 0.0
             # Action smoothing
             action_delta = float(abs(target_power_norm - self.prev_action_power))
             r_smooth = -self.action_smoothness_weight * (action_delta ** 2.0)
@@ -682,7 +727,7 @@ class SilicaSmeltingEnv(gym.Env):
             r_pbrs = (self.gamma * current_potential) - self.prev_potential
             self.prev_potential = current_potential
 
-            composite_reward = float(r_cost_term + r_yield_term + r_sec_term + r_sio_term + r_stoich_penalty + r_smooth + 0.1 * r_pbrs)
+            composite_reward = float(r_cost_term + r_yield_term + r_sec_term + r_sio_term + r_stoich_penalty + r_channeling_penalty + r_smooth + 0.1 * r_pbrs)
         else:
             # Legacy reward mode fallback
             yield_ratio = overall_yield / self.TARGET_YIELD
@@ -761,6 +806,10 @@ class SilicaSmeltingEnv(gym.Env):
             "quartz_purity_pct": self.quartz_purity * 100.0,
             "quartz_moisture_pct": self.quartz_moisture * 100.0,
             "carbon_reactivity": self.carbon_reactivity,
+            "woodchip_fraction_pct": self.woodchip_fraction * 100.0,
+            "burden_permeability_index": self.burden_permeability,
+            "superficial_gas_velocity_m_per_s": self.superficial_gas_velocity,
+            "channeling_risk_pct": self.channeling_risk * 100.0,
             # Mass & Energy Balance Audit Metrics
             "silicon_recovery_pct": overall_yield * 100.0,
             "primary_recovery_pct": tapped_yield * 100.0,
