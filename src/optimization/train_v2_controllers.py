@@ -44,11 +44,14 @@ def train(
     seed: int = 42,
     device: str = "auto",
     multizone: bool = True,
+    resume_path: str = None,
 ):
     print("=" * 90)
     print(f"SILICAFORGE-RL v2.0: Training {algo.upper()} Controller on Multi-Zone SAF Simulator")
     print(f"Algorithm: {algo.upper()} | Observation: {'18-D Multi-Zone' if multizone else '12-D'} | Steps: {timesteps:,}")
     print(f"Reward Mode: Economic Production Cost ($/kg Saleable Si) | Safety Shield: ACTIVE")
+    if resume_path:
+        print(f"Transfer / Resume: Loading base weights from {resume_path}")
     print("=" * 90)
 
     model_dir = PROJECT_ROOT / "models"
@@ -63,7 +66,7 @@ def train(
         eval_env,
         best_model_save_path=str(model_dir / f"best_{algo.lower()}"),
         log_path=str(log_dir),
-        eval_freq=max(5_000, timesteps // 20),
+        eval_freq=max(2_500, timesteps // 20),
         n_eval_episodes=5,
         deterministic=True,
         render=False,
@@ -76,42 +79,62 @@ def train(
     )
 
     if algo.lower() == "sac":
-        # SAC configuration optimized for continuous industrial process control
-        model = SAC(
-            "MlpPolicy",
-            training_env,
-            learning_rate=3e-4,
-            buffer_size=100_000,
-            learning_starts=1_000,
-            batch_size=256,
-            tau=0.01,
-            gamma=0.99,
-            train_freq=1,
-            gradient_steps=1,
-            ent_coef="auto",
-            seed=seed,
-            device=device,
-            verbose=1,
-            tensorboard_log=str(log_dir),
-        )
+        if resume_path and Path(resume_path).exists():
+            print(f"--> Initializing SAC from existing checkpoint: {resume_path}")
+            model = SAC.load(
+                resume_path,
+                env=training_env,
+                device=device,
+                learning_rate=1.5e-4,  # Fine-tuning lower learning rate
+                tensorboard_log=str(log_dir),
+            )
+        else:
+            # SAC configuration optimized for continuous industrial process control
+            model = SAC(
+                "MlpPolicy",
+                training_env,
+                learning_rate=3e-4,
+                buffer_size=100_000,
+                learning_starts=1_000,
+                batch_size=256,
+                tau=0.01,
+                gamma=0.99,
+                train_freq=1,
+                gradient_steps=1,
+                ent_coef="auto",
+                seed=seed,
+                device=device,
+                verbose=1,
+                tensorboard_log=str(log_dir),
+            )
     elif algo.lower() == "ppo":
-        # PPO configuration for bounded industrial control
-        model = PPO(
-            "MlpPolicy",
-            training_env,
-            learning_rate=3e-4,
-            n_steps=2048,
-            batch_size=64,
-            n_epochs=10,
-            gamma=0.99,
-            gae_lambda=0.95,
-            clip_range=0.2,
-            ent_coef=0.005,
-            seed=seed,
-            device=device,
-            verbose=1,
-            tensorboard_log=str(log_dir),
-        )
+        if resume_path and Path(resume_path).exists():
+            print(f"--> Initializing PPO from existing checkpoint: {resume_path}")
+            model = PPO.load(
+                resume_path,
+                env=training_env,
+                device=device,
+                learning_rate=1.5e-4,
+                tensorboard_log=str(log_dir),
+            )
+        else:
+            # PPO configuration for bounded industrial control
+            model = PPO(
+                "MlpPolicy",
+                training_env,
+                learning_rate=3e-4,
+                n_steps=2048,
+                batch_size=64,
+                n_epochs=10,
+                gamma=0.99,
+                gae_lambda=0.95,
+                clip_range=0.2,
+                ent_coef=0.005,
+                seed=seed,
+                device=device,
+                verbose=1,
+                tensorboard_log=str(log_dir),
+            )
     else:
         raise ValueError(f"Unknown algorithm '{algo}'. Supported: 'ppo', 'sac'.")
 
@@ -134,6 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
     parser.add_argument("--device", type=str, default="auto", help="Compute device: auto, cpu, cuda")
     parser.add_argument("--legacy-obs", action="store_true", help="Use legacy observation instead of 18-D multi-zone")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume / fine-tune from")
 
     args = parser.parse_args()
     train(
@@ -142,4 +166,5 @@ if __name__ == "__main__":
         seed=args.seed,
         device=args.device,
         multizone=not args.legacy_obs,
+        resume_path=args.resume,
     )
