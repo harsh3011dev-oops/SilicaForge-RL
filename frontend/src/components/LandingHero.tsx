@@ -35,14 +35,14 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
         {/* Top Minimalist Header */}
         <header className="absolute top-0 left-0 right-0 z-20 max-w-7xl mx-auto px-6 py-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#E65100] to-[#C2410C] flex items-center justify-center text-white shadow-md shadow-[#E65100]/25 border border-white/20">
-              <Flame className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#8C320A] to-[#B44B0F] flex items-center justify-center text-amber-200 shadow-md shadow-[#782806]/35 border border-amber-400/30">
+              <Flame className="w-4 h-4 text-amber-300" />
             </div>
             <div>
               <span className="text-lg font-['Cinzel',serif] tracking-wider text-white font-semibold">
-                SILICAFORGE<span className="text-[#FB923C] font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold ml-1">RL</span>
+                SILICAFORGE<span className="text-[#F59E0B] font-['Plus_Jakarta_Sans',sans-serif] text-xs font-bold ml-1">RL</span>
               </span>
-              <p className="text-[10px] text-slate-300 font-mono tracking-widest uppercase">28.5 MW INDUSTRIAL DIGITAL TWIN</p>
+              <p className="text-[10px] text-amber-200/60 font-mono tracking-widest uppercase">28.5 MW INDUSTRIAL DIGITAL TWIN</p>
             </div>
           </div>
 
@@ -51,7 +51,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
               href="https://github.com/harsh3011dev-oops/SilicaForge-RL"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-white/20 bg-black/40 backdrop-blur-md hover:bg-black/60 text-slate-200 transition-all font-mono"
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-amber-500/20 bg-[#140E0A]/60 backdrop-blur-md hover:bg-[#1C120A]/80 text-amber-100/80 transition-all font-mono"
             >
               <span>GitHub</span>
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
@@ -59,7 +59,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
 
             <button
               onClick={onExplore}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#E65100] to-[#EA580C] hover:from-[#EA580C] hover:to-[#F97316] text-white font-medium text-xs shadow-lg shadow-[#E65100]/30 border border-white/20 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#8C320A] via-[#B44B0F] to-[#D96B1E] hover:from-[#9A380C] hover:via-[#C25211] hover:to-[#E57622] text-[#FFF9EB] font-medium text-xs shadow-md shadow-[#782806]/40 border border-amber-300/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-200" />
               <span>Launch 3D Twin</span>
@@ -92,23 +92,23 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
             and burden stoichiometry. Unlocking closed-loop secondary SiO offgas condensation with zero blowout risk.
           </p>
 
-          {/* Explore More CTA Button */}
+          {/* Explore More CTA Button with Warm Molten Hearth Tones */}
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <button
               onClick={onExplore}
-              className="group px-7 py-3.5 rounded-xl bg-gradient-to-r from-[#E65100] via-[#EA580C] to-[#F97316] text-white font-medium text-sm shadow-xl shadow-[#E65100]/35 hover:shadow-[#E65100]/50 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center gap-3 border border-white/25 cursor-pointer"
+              className="group px-7 py-3.5 rounded-xl bg-gradient-to-r from-[#8C320A] via-[#B44B0F] to-[#D96B1E] hover:from-[#9A380C] hover:via-[#C25211] hover:to-[#E57622] text-[#FFF9EB] font-medium text-sm shadow-xl shadow-[#782806]/50 hover:shadow-[#923308]/65 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center gap-3 border border-amber-300/35 cursor-pointer"
             >
-              <Flame className="w-4 h-4 text-amber-200" />
-              <span className="tracking-wide">EXPLORE 3D DIGITAL TWIN</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <Flame className="w-4 h-4 text-amber-200 group-hover:scale-110 transition-transform" />
+              <span className="tracking-wide font-medium">EXPLORE 3D DIGITAL TWIN</span>
+              <ArrowRight className="w-4 h-4 text-amber-200 group-hover:translate-x-1 transition-transform" />
             </button>
 
             <a
               href="#sources"
-              className="px-5 py-3.5 rounded-xl border border-white/20 bg-black/40 hover:bg-black/60 text-slate-300 text-xs font-['Cormorant_Garamond',serif] italic tracking-wider transition-all flex items-center gap-2"
+              className="px-5 py-3.5 rounded-xl border border-amber-500/30 bg-[#160E08]/75 hover:bg-[#22160C]/90 text-[#FDE68A] hover:text-[#FFFBEB] text-xs font-['Cormorant_Garamond',serif] italic tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-black/40 backdrop-blur-md"
             >
               <span>Scientific Literature &amp; Sources</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              <ChevronDown className="w-3.5 h-3.5 text-amber-400/80" />
             </a>
           </div>
         </div>
@@ -240,7 +240,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onExplore }) => {
 
           <button
             onClick={onExplore}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#E65100] to-[#EA580C] text-white font-medium text-xs whitespace-nowrap shadow-md shadow-[#E65100]/30 border border-white/20 transition-all hover:brightness-110 cursor-pointer"
+            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#8C320A] via-[#B44B0F] to-[#D96B1E] hover:from-[#9A380C] hover:via-[#C25211] hover:to-[#E57622] text-[#FFF9EB] font-medium text-xs whitespace-nowrap shadow-md shadow-[#782806]/40 border border-amber-300/30 transition-all hover:brightness-110 cursor-pointer"
           >
             Launch 3D Visualizer →
           </button>
