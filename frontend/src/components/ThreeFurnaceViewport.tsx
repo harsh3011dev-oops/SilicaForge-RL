@@ -153,9 +153,9 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     scene.add(hearthCoreLight);
 
     // 6. Ground Pedestal (Warm polished foundry concrete)
-    const floorGeo = new THREE.CylinderGeometry(28, 30, 2, 48);
+    const floorGeo = new THREE.CylinderGeometry(36, 38, 2, 64);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0xe5dcce,
+      color: 0xd8d0c2,
       roughness: 0.85,
       metalness: 0.1,
     });
@@ -164,23 +164,46 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
 
-    // Steel circular railing ring around furnace
-    const railingGeo = new THREE.TorusGeometry(22, 0.25, 12, 64);
-    const railingMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.5, metalness: 0.6 });
-    const railingMesh = new THREE.Mesh(railingGeo, railingMat);
-    railingMesh.rotation.x = Math.PI / 2;
-    railingMesh.position.y = 0.2;
-    scene.add(railingMesh);
+    // Circular concentric floor guide tracks (matching industrial turntable in user image)
+    [18, 23, 28, 33].forEach((radius) => {
+      const trackGeo = new THREE.TorusGeometry(radius, 0.12, 8, 80);
+      const trackMat = new THREE.MeshStandardMaterial({ color: 0x9e8b79, roughness: 0.7, metalness: 0.4 });
+      const trackMesh = new THREE.Mesh(trackGeo, trackMat);
+      trackMesh.rotation.x = Math.PI / 2;
+      trackMesh.position.y = 0.05;
+      scene.add(trackMesh);
+    });
 
     // 7. Furnace Assembly Group
     const furnaceGroup = new THREE.Group();
     scene.add(furnaceGroup);
 
-    // A. Outer Shell (Cast Iron Bronze Casing)
-    // 270 degree cylinder for cutaway effect
+    // Industrial Lower Base Conical Skirt (Dark Grey Stepped Foundry Pedestal)
+    const skirtGeo = new THREE.CylinderGeometry(13.8, 16.2, 4.5, 64);
+    const skirtMat = new THREE.MeshStandardMaterial({
+      color: 0x4a5568, // Industrial Slate Grey steel
+      roughness: 0.65,
+      metalness: 0.6,
+    });
+    const skirtMesh = new THREE.Mesh(skirtGeo, skirtMat);
+    skirtMesh.position.y = 2.25;
+    furnaceGroup.add(skirtMesh);
+
+    // Base Support Stiffener Gussets (Radially positioned triangular support plates)
+    for (let i = 0; i < 8; i++) {
+      const gAngle = (i * Math.PI * 2) / 8;
+      const gussetGeo = new THREE.BoxGeometry(0.5, 3.8, 2.2);
+      const gussetMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.5 });
+      const gusset = new THREE.Mesh(gussetGeo, gussetMat);
+      gusset.position.set(Math.cos(gAngle) * 14.8, 2.1, Math.sin(gAngle) * 14.8);
+      gusset.rotation.y = -gAngle;
+      furnaceGroup.add(gusset);
+    }
+
+    // A. Outer Shell (Primary Cylindrical Furnace Pot)
     const outerRadius = 14;
     const innerRadius = 12.2;
-    const furnaceHeight = 18;
+    const furnaceHeight = 15;
     const thetaLength = cutawayActive ? Math.PI * 1.5 : Math.PI * 2;
 
     const outerShellGeo = new THREE.CylinderGeometry(
@@ -194,25 +217,221 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       thetaLength
     );
     const outerShellMat = new THREE.MeshStandardMaterial({
-      color: 0x3d312a, // Warm cast iron bronze
-      roughness: 0.7,
-      metalness: 0.5,
+      color: 0x64748b, // Industrial Medium Steel Slate Grey (matches user image)
+      roughness: 0.55,
+      metalness: 0.55,
       side: THREE.DoubleSide,
     });
     const outerShell = new THREE.Mesh(outerShellGeo, outerShellMat);
-    outerShell.position.y = furnaceHeight / 2;
+    outerShell.position.y = 4.5 + furnaceHeight / 2;
     outerShell.castShadow = true;
     outerShell.receiveShadow = true;
     furnaceGroup.add(outerShell);
 
-    // Structural steel reinforcing bands (stiffener rings)
-    [3, 8, 13, 17.5].forEach((h) => {
-      const bandGeo = new THREE.CylinderGeometry(outerRadius + 0.25, outerRadius + 0.25, 0.6, 64, 1, true, 0, thetaLength);
-      const bandMat = new THREE.MeshStandardMaterial({ color: 0x6e4e37, roughness: 0.5, metalness: 0.7 });
-      const band = new THREE.Mesh(bandGeo, bandMat);
-      band.position.y = h;
-      furnaceGroup.add(band);
+    // =========================================================================
+    // SIGNATURE INDUSTRIAL RED/TERRACOTTA OCTAGONAL CHARGING PLATFORM
+    // =========================================================================
+    const platformHeight = 13.8;
+    const ringShape = new THREE.Shape();
+    const platOuter = 21.0;
+    const platHole = 14.2;
+
+    // Create 8-sided polygon outer contour with service cantilever notches
+    const octSides = 8;
+    for (let i = 0; i < octSides; i++) {
+      const a = (i * Math.PI * 2) / octSides;
+      const px = Math.cos(a) * platOuter;
+      const py = Math.sin(a) * platOuter;
+      if (i === 0) ringShape.moveTo(px, py);
+      else ringShape.lineTo(px, py);
+    }
+    ringShape.closePath();
+
+    // Inner circular cut-out hugging furnace shell
+    const holePath = new THREE.Path();
+    const holeSegments = 32;
+    for (let i = 0; i <= holeSegments; i++) {
+      const a = (i * Math.PI * 2) / holeSegments;
+      const hx = Math.cos(a) * platHole;
+      const hy = Math.sin(a) * platHole;
+      if (i === 0) holePath.moveTo(hx, hy);
+      else holePath.lineTo(hx, hy);
+    }
+    ringShape.holes.push(holePath);
+
+    const platformExtrudeSettings = {
+      depth: 1.4,
+      bevelEnabled: true,
+      bevelSegments: 3,
+      steps: 1,
+      bevelSize: 0.35,
+      bevelThickness: 0.35,
+    };
+    const platformGeo = new THREE.ExtrudeGeometry(ringShape, platformExtrudeSettings);
+    const platformMat = new THREE.MeshStandardMaterial({
+      color: 0xdc2626, // Distinctive Industrial Safety Red / Terracotta (Matches user image!)
+      roughness: 0.5,
+      metalness: 0.4,
     });
+    const platformMesh = new THREE.Mesh(platformGeo, platformMat);
+    platformMesh.rotation.x = Math.PI / 2;
+    platformMesh.position.y = platformHeight;
+    furnaceGroup.add(platformMesh);
+
+    // Safety Railing along the Red Platform Perimeter
+    const railMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4, metalness: 0.7 });
+    for (let i = 0; i < octSides; i++) {
+      const a1 = (i * Math.PI * 2) / octSides;
+      const a2 = ((i + 1) * Math.PI * 2) / octSides;
+      const p1 = new THREE.Vector3(Math.cos(a1) * platOuter, platformHeight + 1.8, Math.sin(a1) * platOuter);
+      const p2 = new THREE.Vector3(Math.cos(a2) * platOuter, platformHeight + 1.8, Math.sin(a2) * platOuter);
+      const dist = p1.distanceTo(p2);
+      const segGeo = new THREE.CylinderGeometry(0.12, 0.12, dist, 8);
+      const seg = new THREE.Mesh(segGeo, railMat);
+      seg.position.copy(p1).lerp(p2, 0.5);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+      furnaceGroup.add(seg);
+
+      // Stanchion posts
+      const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.8, 8);
+      const post = new THREE.Mesh(postGeo, railMat);
+      post.position.set(p1.x, platformHeight + 0.9, p1.z);
+      furnaceGroup.add(post);
+    }
+
+    // =========================================================================
+    // UPPER HOOD: SLOTTED AIR-COOLING CURTAIN CASING (User Image)
+    // =========================================================================
+    const upperCasingHeight = 6.5;
+    const upperCasingGeo = new THREE.CylinderGeometry(14.2, 14.2, upperCasingHeight, 48);
+    const upperCasingMat = new THREE.MeshStandardMaterial({
+      color: 0x94a3b8, // Light industrial grey galvanized steel
+      roughness: 0.45,
+      metalness: 0.6,
+    });
+    const upperCasing = new THREE.Mesh(upperCasingGeo, upperCasingMat);
+    upperCasing.position.y = platformHeight + 1.4 + upperCasingHeight / 2;
+    furnaceGroup.add(upperCasing);
+
+    // Horizontal louvers / ventilation slats on the upper hood
+    for (let j = 0; j < 7; j++) {
+      const louverY = platformHeight + 2.2 + j * 0.85;
+      const louverGeo = new THREE.TorusGeometry(14.35, 0.16, 6, 64);
+      const louverMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+      const louver = new THREE.Mesh(louverGeo, louverMat);
+      louver.rotation.x = Math.PI / 2;
+      louver.position.y = louverY;
+      furnaceGroup.add(louver);
+    }
+
+    // =========================================================================
+    // ELEVATED CRANE INSPECTION CATWALK & STAIRCASE (Left Yellow/Grey Rig in Image)
+    // =========================================================================
+    const catwalkGroup = new THREE.Group();
+    catwalkGroup.position.set(-20.5, 0, 10);
+    catwalkGroup.rotation.y = Math.PI / 5;
+
+    // 4 Support Legs (Structural Steel)
+    const legGeo = new THREE.BoxGeometry(0.6, 12, 0.6);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.7, roughness: 0.4 });
+    [[-3, -2], [3, -2], [-3, 2], [3, 2]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(lx, 6, lz);
+      catwalkGroup.add(leg);
+    });
+
+    // Catwalk Deck Plate (Industrial Yellow Safety Floor)
+    const deckGeo = new THREE.BoxGeometry(8, 0.4, 6);
+    const deckMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.6, metalness: 0.3 });
+    const deck = new THREE.Mesh(deckGeo, deckMat);
+    deck.position.y = 12.2;
+    catwalkGroup.add(deck);
+
+    // Yellow Safety Railing around catwalk
+    const yellowRailMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.5, metalness: 0.5 });
+    const cRailGeo = new THREE.BoxGeometry(8, 1.8, 0.15);
+    const cRail1 = new THREE.Mesh(cRailGeo, yellowRailMat);
+    cRail1.position.set(0, 13.1, 2.9);
+    catwalkGroup.add(cRail1);
+    const cRail2 = new THREE.Mesh(cRailGeo, yellowRailMat);
+    cRail2.position.set(0, 13.1, -2.9);
+    catwalkGroup.add(cRail2);
+    furnaceGroup.add(catwalkGroup);
+
+    // Mobile Ladle Hauler / Tapping Buggy Vehicle (Yellow truck on floor)
+    const buggyGroup = new THREE.Group();
+    buggyGroup.position.set(outerRadius + 4.5, 0, 7);
+    buggyGroup.rotation.y = -Math.PI / 4;
+    const buggyBase = new THREE.Mesh(
+      new THREE.BoxGeometry(4.5, 0.9, 3.2),
+      new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5, metalness: 0.5 })
+    );
+    buggyBase.position.y = 0.6;
+    buggyGroup.add(buggyBase);
+    // Heavy rubber wheels
+    const wheelGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.6, 16);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+    [[-1.6, -1.7], [1.6, -1.7], [-1.6, 1.7], [1.6, 1.7]].forEach(([wx, wz]) => {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, 0.65, wz);
+      buggyGroup.add(wheel);
+    });
+    // Ladle Pot on Buggy
+    const potGeo = new THREE.CylinderGeometry(2.2, 1.8, 2.8, 24);
+    const potMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8, metalness: 0.4 });
+    const pot = new THREE.Mesh(potGeo, potMat);
+    pot.position.y = 2.4;
+    buggyGroup.add(pot);
+    furnaceGroup.add(buggyGroup);
+
+    // =========================================================================
+    // DUAL-DUCT U-BEND GAS EXHAUST OFFGAS HOOD SYSTEM (Front Feature in Image)
+    // =========================================================================
+    const ductPipeMat = new THREE.MeshStandardMaterial({
+      color: 0x78716c, // Heavy insulated steel pipe grey
+      roughness: 0.45,
+      metalness: 0.6,
+    });
+
+    const ductGroup = new THREE.Group();
+    ductGroup.position.set(0, platformHeight + 4.5, 14.8);
+
+    // Left and right vertical collector risers
+    const pipeGeo = new THREE.CylinderGeometry(0.9, 0.9, 5.5, 24);
+    const pipeL = new THREE.Mesh(pipeGeo, ductPipeMat);
+    pipeL.position.set(-3.8, 0, 0);
+    ductGroup.add(pipeL);
+
+    const pipeR = new THREE.Mesh(pipeGeo, ductPipeMat);
+    pipeR.position.set(3.8, 0, 0);
+    ductGroup.add(pipeR);
+
+    // Top horizontal crossbar linking the collectors
+    const crossbarGeo = new THREE.CylinderGeometry(0.9, 0.9, 8.5, 24);
+    const crossbar = new THREE.Mesh(crossbarGeo, ductPipeMat);
+    crossbar.rotation.z = Math.PI / 2;
+    crossbar.position.set(0, 2.75, 0);
+    ductGroup.add(crossbar);
+
+    // Downward central delivery pipe routing into the plant filter
+    const downPipe = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 9.5, 24), ductPipeMat);
+    downPipe.position.set(2.8, -2.5, 2.5);
+    ductGroup.add(downPipe);
+
+    // Elbow joint
+    const elbowGeo = new THREE.TorusGeometry(1.8, 0.9, 16, 24, Math.PI / 2);
+    const elbow = new THREE.Mesh(elbowGeo, ductPipeMat);
+    elbow.position.set(2.8, 2.2, 0.7);
+    elbow.rotation.y = -Math.PI / 2;
+    ductGroup.add(elbow);
+
+    // Horizontal manifold run towards offgas cleaning
+    const horizRun = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 12, 24), ductPipeMat);
+    horizRun.rotation.z = Math.PI / 2;
+    horizRun.position.set(8.5, -7.0, 2.5);
+    ductGroup.add(horizRun);
+    furnaceGroup.add(ductGroup);
 
     // B. Inner Refractory Lining (Ceramic Alumina Firebricks)
     const firebrickTex = createFirebrickTexture();
@@ -233,7 +452,7 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       side: THREE.DoubleSide,
     });
     const innerLining = new THREE.Mesh(innerLiningGeo, innerLiningMat);
-    innerLining.position.y = furnaceHeight / 2;
+    innerLining.position.y = 4.5 + furnaceHeight / 2;
     furnaceGroup.add(innerLining);
 
     // C. Furnace Bottom Hearth Dish (Inverted cone / thick crucible base)
@@ -243,7 +462,7 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       roughness: 0.95,
     });
     const hearthBase = new THREE.Mesh(hearthBaseGeo, hearthBaseMat);
-    hearthBase.position.y = 1.5;
+    hearthBase.position.y = 5.5;
     furnaceGroup.add(hearthBase);
 
     // D. Molten Liquid Silicon Pool (Crucible Lava Floor)
@@ -256,8 +475,9 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       metalness: 0.8,
     });
     const moltenPool = new THREE.Mesh(moltenPoolGeo, moltenPoolMat);
-    moltenPool.position.y = 3.2;
+    moltenPool.position.y = 7.0;
     furnaceGroup.add(moltenPool);
+    moltenBathMeshRef.current = moltenPool;
     moltenBathMeshRef.current = moltenPool;
 
     // Tapping spout (Tap-hole chute on furnace side)
@@ -376,6 +596,74 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       busbar.rotation.z = Math.PI / 4;
       busbar.position.set(0.6, electrodeLength / 2 - 1, 0);
       elecGroup.add(busbar);
+
+      // =======================================================================
+      // DISTINCTIVE BLUE GANTRY STEP-DOWN TRANSFORMER HOUSING (User Image)
+      // =======================================================================
+      const transAngle = angle;
+      const transDist = 18.2;
+      const transX = Math.cos(transAngle) * transDist;
+      const transZ = Math.sin(transAngle) * transDist;
+      const transY = platformHeight + 11.5;
+
+      const transGroup = new THREE.Group();
+      transGroup.position.set(transX, transY, transZ);
+      transGroup.rotation.y = -transAngle + Math.PI / 2;
+
+      // Primary Blue Electrical Casing
+      const transBox = new THREE.Mesh(
+        new THREE.BoxGeometry(6.2, 5.0, 4.4),
+        new THREE.MeshStandardMaterial({
+          color: 0x1d4ed8, // Vibrant Industrial Transformer Blue (Exactly like user photo)
+          roughness: 0.4,
+          metalness: 0.6,
+        })
+      );
+      transBox.castShadow = true;
+      transGroup.add(transBox);
+
+      // Cooling Heat Exchanger Radiator Fins (Horizontal cooling slats)
+      for (let fin = -2; fin <= 2; fin++) {
+        const finMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(6.4, 0.15, 4.6),
+          new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.7, roughness: 0.3 })
+        );
+        finMesh.position.y = fin * 0.9;
+        transGroup.add(finMesh);
+      }
+
+      // Overhead High-Voltage Bushings & Insulators on top of Transformer
+      for (let bi = -1; bi <= 1; bi++) {
+        const bush = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.35, 0.45, 1.8, 12),
+          new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.3, metalness: 0.2 }) // Reddish Porcelain
+        );
+        bush.position.set(bi * 1.8, 3.2, 0);
+        transGroup.add(bush);
+
+        // Terminal copper crown
+        const crown = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3, 8, 8),
+          new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 })
+        );
+        crown.position.set(bi * 1.8, 4.2, 0);
+        transGroup.add(crown);
+      }
+
+      furnaceGroup.add(transGroup);
+
+      // Multi-strand flexible water-cooled copper bus-tube bundle from Blue Transformer to Electrode
+      const tubeCount = 6;
+      for (let tb = 0; tb < tubeCount; tb++) {
+        const curveStart = new THREE.Vector3(transX, transY - 1.2 + (tb * 0.4), transZ);
+        const curveMid = new THREE.Vector3((transX + x) * 0.55, transY + 1.5, (transZ + z) * 0.55);
+        const curveEnd = new THREE.Vector3(x + Math.cos(angle + (tb - 3) * 0.15) * 1.6, 12 + electrodeLength / 2 - 2, z + Math.sin(angle + (tb - 3) * 0.15) * 1.6);
+        const curve = new THREE.QuadraticBezierCurve3(curveStart, curveMid, curveEnd);
+        const tubeGeo = new THREE.TubeGeometry(curve, 16, 0.16, 8, false);
+        const tubeMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35, metalness: 0.85 });
+        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        furnaceGroup.add(tubeMesh);
+      }
 
       furnaceGroup.add(elecGroup);
       electrodesRef.current.push(elecGroup);
