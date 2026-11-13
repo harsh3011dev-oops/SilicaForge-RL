@@ -716,26 +716,29 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
     smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
     smokePosArrayRef.current = smokePositions;
 
-    // Create particle sprite texture
+    // Create particle sprite texture for Heavy Industrial Black/Carbon Smoke
     const pCanvas = document.createElement('canvas');
     pCanvas.width = 64;
     pCanvas.height = 64;
     const pCtx = pCanvas.getContext('2d');
     if (pCtx) {
       const grad = pCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-      grad.addColorStop(0, 'rgba(235, 230, 220, 0.85)');
-      grad.addColorStop(0.5, 'rgba(215, 205, 190, 0.45)');
-      grad.addColorStop(1, 'rgba(200, 190, 180, 0)');
+      // Jet Black & Dense Charcoal Smoke Plume
+      grad.addColorStop(0, 'rgba(10, 10, 12, 1.0)');
+      grad.addColorStop(0.35, 'rgba(20, 20, 24, 0.90)');
+      grad.addColorStop(0.65, 'rgba(32, 32, 38, 0.65)');
+      grad.addColorStop(1, 'rgba(25, 25, 30, 0)');
       pCtx.fillStyle = grad;
       pCtx.fillRect(0, 0, 64, 64);
     }
     const smokeTex = new THREE.CanvasTexture(pCanvas);
 
     const smokeMat = new THREE.PointsMaterial({
-      size: 2.2,
+      size: 4.8,
+      color: 0x1a1a1e,
       map: smokeTex,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.88,
       depthWrite: false,
       blending: THREE.NormalBlending,
     });
@@ -765,10 +768,10 @@ export const ThreeFurnaceViewport: React.FC<ThreeFurnaceViewportProps> = ({
       // Animate Smoke plume based on sio_lost
       if (smokePosArrayRef.current && smokeParticlesRef.current) {
         const positions = smokePosArrayRef.current;
-        // Dynamic opacity tied to volatile SiO loss
-        const targetOpacity = Math.min(0.85, Math.max(0.18, curTelemetry.sio_lost * 8));
-        smokeMat.opacity = THREE.MathUtils.lerp(smokeMat.opacity, targetOpacity, 0.05);
-        smokeMat.size = 2.0 + curTelemetry.sio_lost * 25;
+        // Dynamic opacity tied to volatile SiO loss with high baseline for visible black carbon smoke
+        const targetOpacity = Math.min(0.95, Math.max(0.72, 0.72 + (curTelemetry.sio_lost || 0) * 12));
+        smokeMat.opacity = THREE.MathUtils.lerp(smokeMat.opacity, targetOpacity, 0.08);
+        smokeMat.size = 4.2 + THREE.MathUtils.clamp((curTelemetry.sio_lost || 0) * 20, 0, 4.0);
 
         for (let i = 0; i < particleCount; i++) {
           const vel = smokeVelocities[i];
